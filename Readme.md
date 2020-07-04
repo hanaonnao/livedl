@@ -5,6 +5,8 @@
 ### 更新履歴
 2020.06.08 - APIの仕様変更に対応  
 http://egg.5ch.net/test/read.cgi/software/1570634489/535
+2020.07.04　‐　「broadcastId not found」エラーへの対処
+https://egg.5ch.net/test/read.cgi/software/1570634489/744
 
 ### 更新方法
 
