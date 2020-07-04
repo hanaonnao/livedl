@@ -115,8 +115,7 @@ func NewHls(opt options.Option, prop map[string]interface{}) (hls *NicoHls, err 
 
 	broadcastId, ok := prop["broadcastId"].(string)
 	if !ok {
-		err = fmt.Errorf("broadcastId is not string")
-		return
+		broadcastId = "0"	
 	}
 
 	webSocketUrl, ok := prop["//webSocketUrl"].(string)
@@ -2147,7 +2146,6 @@ func NicoRecHls(opt options.Option) (done, playlistEnd, notLogin, reserved bool,
 
 	} else {
 		for _, k := range []string{
-			"broadcastId",
 			"//webSocketUrl",
 			//"//myId",
 		} {
