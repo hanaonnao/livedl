@@ -6,7 +6,9 @@
 2020.06.08 - APIの仕様変更に対応  
 http://egg.5ch.net/test/read.cgi/software/1570634489/535  
 2020.07.04　‐　「broadcastId not found」エラーへの対処  
-https://egg.5ch.net/test/read.cgi/software/1570634489/744
+https://egg.5ch.net/test/read.cgi/software/1570634489/744  
+2020.07.29　‐　ニコ生のコメント保存できない問題を修正  
+https://egg.5ch.net/test/read.cgi/software/1595715643/17  
 
 ### 更新方法
 
