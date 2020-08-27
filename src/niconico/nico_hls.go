@@ -359,9 +359,10 @@ func (hls *NicoHls) commentHandler(tag string, attr interface{}) (err error) {
 		var thread string
 		if d, ok := attrMap["thread"].(float64); ok {
 			thread = fmt.Sprintf("%.f", d)
-		} else if s, ok := attrMap["thread"].(string); ok {	
+		} else if s, ok := attrMap["thread"].(string); ok {
 			thread = s
-		}	
+		}
+		
 		hls.dbInsert("comment", map[string]interface{}{
 			"vpos": attrMap["vpos"],
 			"date": attrMap["date"],
