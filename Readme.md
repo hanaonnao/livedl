@@ -1,4 +1,4 @@
-# livedl
+c# livedl
 新配信(HTML5)に対応したニコ生録画ツール。ニコ生以外のサイトにも対応予定
 
 ## 更新
@@ -32,9 +32,9 @@ VERSION="18.04.4 LTS (Bionic Beaver)"
 
 ### Go実行環境のインストール　（無い場合）
 ```
-wget https://dl.google.com/go/go1.14.4.linux-amd64.tar.gz
+wget https://dl.google.com/go/go1.15.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf go1.14.4.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.15.linux-amd64.tar.gz
 export PATH=$PATH:/usr/local/go/bin
 # 必要であれば、bashrcなどにPATHを追加する
 ```
