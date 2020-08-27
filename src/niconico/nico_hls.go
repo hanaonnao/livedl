@@ -356,6 +356,12 @@ func (hls *NicoHls) commentHandler(tag string, attr interface{}) (err error) {
 		calc_s := fmt.Sprintf("%d,%d,%d,%s,%s", vpos, date, date_usec, user_id, content)
 		hash := fmt.Sprintf("%x", sha3.Sum256([]byte(calc_s)))
 
+		var thread string
+		if d, ok := attrMap["thread"].(float64); ok {
+			thread = fmt.Sprintf("%.f", d)
+		} else if s, ok := attrMap["thread"].(string); ok {	
+			thread = s
+		}	
 		hls.dbInsert("comment", map[string]interface{}{
 			"vpos": attrMap["vpos"],
 			"date": attrMap["date"],
@@ -368,14 +374,16 @@ func (hls *NicoHls) commentHandler(tag string, attr interface{}) (err error) {
 			"mail": attrMap["mail"],
 			"premium": attrMap["premium"],
 			"score": attrMap["score"],
-			"thread": attrMap["thread"],
+			"thread": thread,
 			"origin": attrMap["origin"],
 			"locale": attrMap["locale"],
 			"hash": hash,
 		})
 	} else {
-		if _, ok := attrMap["thread"].(float64); ok {
-			hls.dbKVSet("comment/thread", attrMap["thread"])
+		if d, ok := attrMap["thread"].(float64); ok {
+			hls.dbKVSet("comment/thread", fmt.Sprintf("%.f", d))
+		} else if s, ok := attrMap["thread"].(string); ok {
+				hls.dbKVSet("comment/thread", s)
 		}
 	}
 
@@ -630,7 +638,7 @@ func (hls *NicoHls) waitAllGoroutines() {
 
 func (hls *NicoHls) getwaybackkey(threadId string) (waybackkey string, neterr, err error) {
 
-	uri := fmt.Sprintf("http://live.nicovideo.jp/api/getwaybackkey?thread=%s", threadId)
+	uri := fmt.Sprintf("http://live.nicovideo.jp/api/getwaybackkey?thread=%s", url.QueryEscape(threadId))
 	resp, err, neterr := httpbase.Get(uri, map[string]string{"Cookie": "user_session=" + hls.NicoSession})
 	if err != nil {
 		return
@@ -646,10 +654,6 @@ func (hls *NicoHls) getwaybackkey(threadId string) (waybackkey string, neterr, e
 	}
 
 	waybackkey = strings.TrimPrefix(string(dat), "waybackkey=")
-	if waybackkey == "" {
-		err = fmt.Errorf("waybackkey not found")
-		return
-	}
 	return
 }
 func (hls *NicoHls) getTsCommentFromWhen() (res_from int, when float64) {
