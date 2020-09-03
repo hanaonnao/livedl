@@ -185,6 +185,7 @@ func main() {
 				os.Exit(1)
 			}
 		}
+		
 	case "DB2HLS":
 		if opt.NicoHlsPort == 0 {
 			fmt.Println("HLS port not specified")
