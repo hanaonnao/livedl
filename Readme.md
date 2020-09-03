@@ -9,6 +9,8 @@ http://egg.5ch.net/test/read.cgi/software/1570634489/535
 https://egg.5ch.net/test/read.cgi/software/1570634489/744  
 2020.07.29　‐　ニコ生のコメント保存できない問題を修正  
 https://egg.5ch.net/test/read.cgi/software/1595715643/17  
+2020.09.03　‐　セルフ追っかけ再生、追加オプション  （[更新説明](https://github.com/hanaonnao/livedl/blob/master/ReleaseNotes.md#2020090339)）  
+https://egg.5ch.net/test/read.cgi/software/1595715643/57  
 
 ### 更新方法
 
