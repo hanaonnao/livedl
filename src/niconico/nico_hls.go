@@ -1164,13 +1164,15 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 
 		type seq_t struct {
 			seqno int
+			duration float64
 			uri string
 		}
 		var seqlist []seq_t
 
 		var seqMax int
-		var duration float64
+		var totalDuration float64
 		for i, a := range ma {
+			var duration float64
 			seqno := i + hls.playlist.seqNo
 			if seqno > seqMax {
 				seqMax = seqno
@@ -1184,7 +1186,8 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 				}
 
 				if hls.isTimeshift {
-					duration += d
+					duration = d
+					totalDuration += d
 				} else {
 					if i == 0 {
 						if d > 3 {
@@ -1207,6 +1210,7 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 
 			seqlist = append(seqlist, seq_t{
 				seqno: seqno,
+				duration: duration,
 				uri: uri.String(),
 			})
 
@@ -1231,10 +1235,8 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 		}
 
 		if hls.isTimeshift {
-			hls.timeshiftStart = currentPos + duration - 0.49
-
 			if (! hls.ultrafastTimeshift) {
-				td := duration * float64(time.Second) / 6
+				td := seqlist[0].duration * float64(time.Second)
 				hls.playlist.nextTime = time.Now().Add(time.Duration(td))
 			}
 		}
@@ -1300,8 +1302,16 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 				hls.ultrafastTimeshift = hls.ultrafastTimeshiftOrig
 		}
 
+		if hls.isTimeshift {
+			hls.timeshiftStart = currentPos - 0.49
+		}
+
 		var found404 bool
 		for _, seq := range seqlist {
+			if hls.isTimeshift {
+				hls.timeshiftStart += seq.duration
+			}
+
 			if hls.memdbCheck200(seq.seqno) {
 				if seq.seqno == hls.playlist.seqNo {
 					if hls.isTimeshift {
@@ -1355,7 +1365,7 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 		}
 
 		if hls.isTimeshift {
-			d := streamDuration - (currentPos + duration)
+			d := streamDuration - (currentPos + totalDuration)
 			if d < 1.0 {
 				isEnd = true
 				return
