@@ -2,15 +2,10 @@ c# livedl
 新配信(HTML5)に対応したニコ生録画ツール。ニコ生以外のサイトにも対応予定
 
 ## 更新
-### 更新履歴
-2020.06.08 - APIの仕様変更に対応  
-http://egg.5ch.net/test/read.cgi/software/1570634489/535  
-2020.07.04　‐　「broadcastId not found」エラーへの対処  
-https://egg.5ch.net/test/read.cgi/software/1570634489/744  
-2020.07.29　‐　ニコ生のコメント保存できない問題を修正  
-https://egg.5ch.net/test/read.cgi/software/1595715643/17  
-2020.09.03　‐　セルフ追っかけ再生、追加オプション  （[更新説明](https://github.com/hanaonnao/livedl/blob/master/ReleaseNotes.md#2020090339)）  
-https://egg.5ch.net/test/read.cgi/software/1595715643/57  
+
+[更新履歴](https://github.com/hanaonnao/livedl/blob/master/changelog.txt)
+
+
 
 ### 更新方法
 
@@ -34,9 +29,9 @@ VERSION="18.04.4 LTS (Bionic Beaver)"
 
 ### Go実行環境のインストール　（無い場合）
 ```
-wget https://dl.google.com/go/go1.15.linux-amd64.tar.gz
+wget https://dl.google.com/go/go1.15.11.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf go1.15.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.15.11.linux-amd64.tar.gz
 export PATH=$PATH:/usr/local/go/bin
 # 必要であれば、bashrcなどにPATHを追加する
 ```
