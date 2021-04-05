@@ -79,6 +79,7 @@ type NicoHls struct {
 
 	isTimeshift bool
 	timeshiftStart float64
+	timeshiftStop int
 	fastTimeshift bool
 	ultrafastTimeshift bool
 
@@ -115,7 +116,7 @@ func NewHls(opt options.Option, prop map[string]interface{}) (hls *NicoHls, err 
 
 	broadcastId, ok := prop["broadcastId"].(string)
 	if !ok {
-		broadcastId = "0"	
+		broadcastId = "0"
 	}
 
 	webSocketUrl, ok := prop["//webSocketUrl"].(string)
@@ -171,7 +172,6 @@ func NewHls(opt options.Option, prop map[string]interface{}) (hls *NicoHls, err 
 		}
 	}
 
-	
 	// ユーザ名
 	if userName, ok := prop["userName"]; ok {
 		uname, _ = userName.(string)
@@ -281,6 +281,7 @@ func NewHls(opt options.Option, prop map[string]interface{}) (hls *NicoHls, err 
 		gmMain: gorman.WithChecker(func(c int) {hls.checkReturnCode(c)}),
 
 	timeshiftStart: opt.NicoTsStart,
+	timeshiftStop: opt.NicoTsStop,
 }
 
 	hls.fastTimeshiftOrig = hls.fastTimeshift
@@ -362,7 +363,7 @@ func (hls *NicoHls) commentHandler(tag string, attr interface{}) (err error) {
 		} else if s, ok := attrMap["thread"].(string); ok {
 			thread = s
 		}
-		
+
 		hls.dbInsert("comment", map[string]interface{}{
 			"vpos": attrMap["vpos"],
 			"date": attrMap["date"],
@@ -384,7 +385,7 @@ func (hls *NicoHls) commentHandler(tag string, attr interface{}) (err error) {
 		if d, ok := attrMap["thread"].(float64); ok {
 			hls.dbKVSet("comment/thread", fmt.Sprintf("%.f", d))
 		} else if s, ok := attrMap["thread"].(string); ok {
-				hls.dbKVSet("comment/thread", s)
+			hls.dbKVSet("comment/thread", s)
 		}
 	}
 
@@ -401,6 +402,7 @@ const (
 	MAIN_INVALID_STREAM_QUALITY
 	MAIN_TEMPORARILY_ERROR
 	PLAYLIST_END
+	TIMESHIFT_STOP
 	PLAYLIST_403
 	PLAYLIST_ERROR
 	DELAY
@@ -490,6 +492,20 @@ func (hls *NicoHls) markRestartMain(delay int) {
 }
 func (hls *NicoHls) checkReturnCode(code int) {
 	// NEVER restart goroutines here except interrupt handler
+	var fPlaylistEnd = func() {
+		hls.finish = true
+		if hls.isTimeshift {
+			if hls.commentDone {
+				hls.stopPCGoroutines()
+			} else if (! hls.getCommentStarted()) {
+				hls.stopPCGoroutines()
+			} else {
+				fmt.Println("waiting comment")
+			}
+		} else {
+			hls.stopPCGoroutines()
+		}
+	}
 	switch code {
 	case NETWORK_ERROR, MAIN_TEMPORARILY_ERROR:
 		delay := hls.getStartDelay()
@@ -518,18 +534,11 @@ func (hls *NicoHls) checkReturnCode(code int) {
 
 	case PLAYLIST_END:
 		fmt.Println("playlist end.")
-		hls.finish = true
-		if hls.isTimeshift {
-			if hls.commentDone {
-				hls.stopPCGoroutines()
-			} else if (! hls.getCommentStarted()) {
-				hls.stopPCGoroutines()
-			} else {
-				fmt.Println("waiting comment")
-			}
-		} else {
-			hls.stopPCGoroutines()
-		}
+		fPlaylistEnd()
+
+	case TIMESHIFT_STOP:
+		fmt.Println("timeshift stop.")
+		fPlaylistEnd()
 
 	case MAIN_WS_ERROR:
 		hls.stopPGoroutines()
@@ -639,7 +648,7 @@ func (hls *NicoHls) waitAllGoroutines() {
 
 func (hls *NicoHls) getwaybackkey(threadId string) (waybackkey string, neterr, err error) {
 
-	uri := fmt.Sprintf("http://live.nicovideo.jp/api/getwaybackkey?thread=%s", url.QueryEscape(threadId))
+	uri := fmt.Sprintf("https://live.nicovideo.jp/api/getwaybackkey?thread=%s", url.QueryEscape(threadId))
 	resp, err, neterr := httpbase.Get(uri, map[string]string{"Cookie": "user_session=" + hls.NicoSession})
 	if err != nil {
 		return
@@ -686,7 +695,7 @@ func (hls *NicoHls) startComment(messageServerUri, threadId string) {
 			conn, _, err := websocket.DefaultDialer.Dial(
 				messageServerUri,
 				map[string][]string{
-					"Origin": []string{"http://live2.nicovideo.jp"},
+					"Origin": []string{"https://live2.nicovideo.jp"},
 					"Sec-WebSocket-Protocol": []string{"msg.nicovideo.jp#json"},
 					"User-Agent": []string{httpbase.GetUserAgent()},
 				},
@@ -1047,7 +1056,7 @@ func (hls *NicoHls) saveMedia(seqno int, uri string) (is403, is404, is500 bool, 
 	return
 }
 
-func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, neterr, err error) {
+func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, isStop, is500 bool, neterr, err error) {
 	u := argUri.String()
 	m3u8, code, millisec, err, neterr := getString(u)
 	if hls.nicoDebug {
@@ -1164,13 +1173,15 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 
 		type seq_t struct {
 			seqno int
+			duration float64
 			uri string
 		}
 		var seqlist []seq_t
 
 		var seqMax int
-		var duration float64
+		var totalDuration float64
 		for i, a := range ma {
+			var duration float64
 			seqno := i + hls.playlist.seqNo
 			if seqno > seqMax {
 				seqMax = seqno
@@ -1184,7 +1195,8 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 				}
 
 				if hls.isTimeshift {
-					duration += d
+					duration = d
+					totalDuration += d
 				} else {
 					if i == 0 {
 						if d > 3 {
@@ -1207,6 +1219,7 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 
 			seqlist = append(seqlist, seq_t{
 				seqno: seqno,
+				duration: duration,
 				uri: uri.String(),
 			})
 
@@ -1231,10 +1244,8 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 		}
 
 		if hls.isTimeshift {
-			hls.timeshiftStart = currentPos + duration - 0.49
-
 			if (! hls.ultrafastTimeshift) {
-				td := duration * float64(time.Second) / 6
+				td := seqlist[0].duration * float64(time.Second)
 				hls.playlist.nextTime = time.Now().Add(time.Duration(td))
 			}
 		}
@@ -1242,6 +1253,10 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 		// prints Current SeqNo
 		if hls.isTimeshift {
 			sec := int(hls.playlist.position)
+			if hls.timeshiftStop != 0 && sec >= hls.timeshiftStop {
+				isStop = true
+				return
+			}
 			var pos string
 			if sec >= 3600 {
 				pos += fmt.Sprintf("%02d:%02d:%02d", sec / 3600, (sec % 3600) / 60, sec % 60)
@@ -1300,8 +1315,16 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 				hls.ultrafastTimeshift = hls.ultrafastTimeshiftOrig
 		}
 
+		if hls.isTimeshift {
+			hls.timeshiftStart = currentPos - 0.49
+		}
+
 		var found404 bool
 		for _, seq := range seqlist {
+			if hls.isTimeshift {
+				hls.timeshiftStart += seq.duration
+			}
+
 			if hls.memdbCheck200(seq.seqno) {
 				if seq.seqno == hls.playlist.seqNo {
 					if hls.isTimeshift {
@@ -1355,7 +1378,7 @@ func (hls *NicoHls) getPlaylist(argUri *url.URL) (is403, isEnd, is500 bool, nete
 		}
 
 		if hls.isTimeshift {
-			d := streamDuration - (currentPos + duration)
+			d := streamDuration - (currentPos + totalDuration)
 			if d < 1.0 {
 				isEnd = true
 				return
@@ -1485,7 +1508,7 @@ func (hls *NicoHls) startPlaylist(uri string) {
 
 				//fmt.Println(uri)
 
-				is403, isEnd, is500, neterr, err := hls.getPlaylist(uri)
+				is403, isEnd, isStop, is500, neterr, err := hls.getPlaylist(uri)
 				if neterr != nil {
 					if (! hls.interrupted()) {
 						log.Println("playlist:", e)
@@ -1509,6 +1532,9 @@ func (hls *NicoHls) startPlaylist(uri string) {
 				}
 				if isEnd {
 					return PLAYLIST_END
+				}
+				if isStop {
+					return TIMESHIFT_STOP
 				}
 
 			case <-sig:
@@ -1737,7 +1763,7 @@ func (hls *NicoHls) startMain() {
 					return ERROR_SHUTDOWN
 				}
 
-				// http://nicolive.cdn.nimg.jp/relive/front_assets/scripts/nicolib.4bb8b62b35.js
+				// https://nicolive.cdn.nimg.jp/relive/front_assets/scripts/nicolib.4bb8b62b35.js
 				switch code {
 				case "INVALID_STREAM_QUALITY":
 					// webSocket自体を再接続しないと、コメントサーバが取得できない
@@ -1943,9 +1969,9 @@ func postTsRsv1(opt options.Option) (err error) {
 func postTsRsvBase(num int, vid, session string) (err error) {
 	var uri string
 	if num == 0 {
-		uri = fmt.Sprintf("http://live.nicovideo.jp/api/watchingreservation?mode=watch_num&vid=%s", vid)
+		uri = fmt.Sprintf("https://live.nicovideo.jp/api/watchingreservation?mode=watch_num&vid=%s", vid)
 	} else {
-		uri = fmt.Sprintf("http://live.nicovideo.jp/api/watchingreservation?mode=confirm_watch_my&vid=%s", vid)
+		uri = fmt.Sprintf("https://live.nicovideo.jp/api/watchingreservation?mode=confirm_watch_my&vid=%s", vid)
 	}
 
 	header := map[string]string{
@@ -1976,8 +2002,8 @@ func postTsRsvBase(num int, vid, session string) (err error) {
 	}
 
 	// "X-Requested-With": "XMLHttpRequest",
-	// "Origin": "http://live.nicovideo.jp",
-	// "Referer": fmt.Sprintf("http://live.nicovideo.jp/gate/%s", opt.NicoLiveId),
+	// "Origin": "https://live.nicovideo.jp",
+	// "Referer": fmt.Sprintf("https://live.nicovideo.jp/gate/%s", opt.NicoLiveId),
 	// "X-Prototype-Version": "1.6.0.3",
 
 	var vals url.Values
@@ -2001,7 +2027,7 @@ func postTsRsvBase(num int, vid, session string) (err error) {
 		}
 	}
 
-	dat1, _, _, err, neterr := postStringHeader("http://live.nicovideo.jp/api/watchingreservation", header, vals)
+	dat1, _, _, err, neterr := postStringHeader("https://live.nicovideo.jp/api/watchingreservation", header, vals)
 	if err != nil || neterr != nil {
 		if err == nil {
 			err = neterr
@@ -2024,7 +2050,7 @@ func getProps(opt options.Option) (props interface{}, isFlash, notLogin, tsRsv0,
 		header["Cookie"] = "user_session=" + opt.NicoSession
 	}
 
-	uri := fmt.Sprintf("http://live2.nicovideo.jp/watch/%s", opt.NicoLiveId)
+	uri := fmt.Sprintf("https://live2.nicovideo.jp/watch/%s", opt.NicoLiveId)
 	dat, _, _, err, neterr := getStringHeader(uri, header)
 	if err != nil || neterr != nil {
 		if err == nil {
@@ -2125,7 +2151,7 @@ func NicoRecHls(opt options.Option) (done, playlistEnd, notLogin, reserved bool,
 	proplist := map[string][]string{
 		// "broadcaster" // nicocas
 		"cas-userName": []string{"broadcaster", "nickname"}, // ユーザ名
-		"cas-userPageUrl": []string{"broadcaster", "pageUrl"}, // "http://www.nicovideo.jp/user/\d+"
+		"cas-userPageUrl": []string{"broadcaster", "pageUrl"}, // "https://www.nicovideo.jp/user/\d+"
 		// "community"
 		"comId": []string{"community", "id"}, // "co\d+"
 		// "program"
@@ -2141,7 +2167,7 @@ func NicoRecHls(opt options.Option) (done, playlistEnd, notLogin, reserved bool,
 		"providerType": []string{"program", "providerType"}, // "community"
 		"status": []string{"program", "status"}, //
 		"userName": []string{"program", "supplier", "name"}, // ユーザ名
-		"userPageUrl": []string{"program", "supplier", "pageUrl"}, // "http://www.nicovideo.jp/user/\d+"
+		"userPageUrl": []string{"program", "supplier", "pageUrl"}, // "https://www.nicovideo.jp/user/\d+"
 		"title": []string{"program", "title"}, // title
 		// "site"
 		"nicocas": []string{"site", "nicocas"}, //
