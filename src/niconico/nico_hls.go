@@ -681,7 +681,7 @@ func (hls *NicoHls) getCommentStarted() bool {
 	defer hls.mtxCommentStarted.Unlock()
 	return hls.commentStarted
 }
-func (hls *NicoHls) startComment(messageServerUri, threadId string) {
+func (hls *NicoHls) startComment(messageServerUri, threadId, waybackkey string) {
 	if (! hls.getCommentStarted()) && (! hls.commentDone) {
 		hls.setCommentStarted(true)
 
@@ -770,15 +770,6 @@ func (hls *NicoHls) startComment(messageServerUri, threadId string) {
 							case <-time.After(1 * time.Second):
 								c := getChatCount()
 								if c == 0 || c == pre {
-
-									waybackkey, neterr, err := hls.getwaybackkey(threadId)
-									if neterr != nil {
-										return NETWORK_ERROR
-									}
-									if err != nil {
-										log.Printf("getwaybackkey: %v\n", err)
-										return COMMENT_DONE
-									}
 
 									_, when := hls.getTsCommentFromWhen()
 
@@ -1733,7 +1724,8 @@ func (hls *NicoHls) startMain() {
 						if !ok {
 							break
 						}
-						hls.startComment(messageServerUri, threadId)
+						waybackkey, _ := objs.FindString(res, "data", "waybackkey")
+						hls.startComment(messageServerUri, threadId, waybackkey)
 
 					case "statistics":
 					case "permit":
