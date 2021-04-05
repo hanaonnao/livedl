@@ -44,6 +44,7 @@ type Option struct {
 	NicoHlsPort            int
 	NicoLimitBw            int
 	NicoTsStart            float64
+	NicoTsStop             int
 	NicoFormat             string
 	NicoFastTs             bool
 	NicoUltraFastTs        bool
@@ -95,6 +96,9 @@ COMMAND:
   -tcas    ツイキャスの録画
   -yt      YouTube Liveの録画
   -d2m     録画済みのdb(.sqlite3)をmp4に変換する(-db-to-mp4)
+  -d2h     [実験的] 録画済みのdb(.sqlite3)を視聴するためのHLSサーバを立てる(-db-to-hls)
+           開始シーケンス番号は（変換ではないが） -nico-conv-seqno-start で指定
+           使用例：$ livedl lvXXXXXXXXX.sqlite3 -d2h -nico-hls-port 12345 -nico-conv-seqno-start 2780
 
 オプション/option:
   -h         ヘルプを表示
@@ -133,6 +137,11 @@ COMMAND:
   -nico-skip-hb=off              (+) コメント書き出し時に/hbコマンドも出す(デフォルト)
   -nico-ts-start <num>           タイムシフトの録画を指定した再生時間(秒)から開始する
   -nico-ts-start-min <num>       タイムシフトの録画を指定した再生時間(分)から開始する
+  -nico-conv-seqno-start <num>   MP4への変換を指定したセグメント番号から開始する
+  -nico-conv-seqno-end <num>     MP4への変換を指定したセグメント番号で終了する
+  -nico-conv-force-concat        MP4への変換で画質変更または抜けがあっても分割しないように設定
+  -nico-conv-force-concat=on     (+) 上記を有効に設定
+  -nico-conv-force-concat=off    (+) 上記を無効に設定(デフォルト)
 
 ツイキャス録画用オプション:
   -tcas-retry=on                 (+) 録画終了後に再試行を行う
@@ -158,18 +167,6 @@ HTTP関連
   -http-skip-verify=on           (+) TLS証明書の認証をスキップする (32bit版対策)
   -http-skip-verify=off          (+) TLS証明書の認証をスキップしない (デフォルト)
 
-追加オプション
-　-nico-conv-seqno-start ＜num＞  MP4への変換を指定したセグメント番号から開始する
-　-nico-conv-seqno-end ＜num＞  　MP4への変換を指定したセグメント番号で終了する
-　-nico-conv-force-concat     　　MP4への変換で画質変更または抜けがあっても分割しないように設定
-　-nico-conv-force-concat=on     (+) 上記を有効に設定
-　-nico-conv-force-concat=off    (+) 上記を無効に設定(デフォルト)
- 
-追加オプション [実験的]
-　-d2h
-     録画済みのdb(.sqlite3)を視聴するためのHLSサーバを立てる(-db-to-hls)
-　　　開始シーケンス番号は（変換ではないが） -nico-conv-seqno-start で指定
-     使用例：$ livedl lvXXXXXXXXX.sqlite3 -d2h -nico-hls-port 12345 -nico-conv-seqno-start 2780
 
 (+)のついたオプションは、次回も同じ設定が使用されることを示す。
 
@@ -401,6 +398,45 @@ func dbOpen() (db *sql.DB, err error) {
 	if err != nil {
 		return
 	}
+	return
+}
+
+func parseTime(arg string) (ret int, err error) {
+	var hour, min, sec int
+
+	if m := regexp.MustCompile(`^(\d+):(\d+):(\d+)$`).FindStringSubmatch(arg); len(m) > 0 {
+		hour, err = strconv.Atoi(m[1])
+		if err != nil {
+			return
+		}
+		min, err = strconv.Atoi(m[2])
+		if err != nil {
+			return
+		}
+		sec, err = strconv.Atoi(m[3])
+		if err != nil {
+			return
+		}
+	} else if m := regexp.MustCompile(`^(\d+):(\d+)$`).FindStringSubmatch(arg); len(m) > 0 {
+		min, err = strconv.Atoi(m[1])
+		if err != nil {
+			return
+		}
+		sec, err = strconv.Atoi(m[2])
+		if err != nil {
+			return
+		}
+	} else if m := regexp.MustCompile(`^(\d+)$`).FindStringSubmatch(arg); len(m) > 0 {
+		sec, err = strconv.Atoi(m[1])
+		if err != nil {
+			return
+		}
+	} else {
+		err = fmt.Errorf("regexp not matched")
+	}
+
+	ret = hour * 3600 + min * 60 + sec
+
 	return
 }
 
@@ -753,7 +789,7 @@ func ParseArgs() (opt Option) {
 			if err != nil {
 				return err
 			}
-			num, err := strconv.Atoi(s)
+			num, err := parseTime(s)
 			if err != nil {
 				return fmt.Errorf("--nico-ts-start: Not a number %s\n", s)
 			}
@@ -765,11 +801,35 @@ func ParseArgs() (opt Option) {
 			if err != nil {
 				return err
 			}
-			num, err := strconv.Atoi(s)
+			num, err := parseTime(s + ":0")
 			if err != nil {
 				return fmt.Errorf("--nico-ts-start-min: Not a number %s\n", s)
 			}
-			opt.NicoTsStart = float64(num * 60)
+			opt.NicoTsStart = float64(num)
+			return nil
+		}},
+		Parser{regexp.MustCompile(`\A(?i)--?nico-?ts-?stop\z`), func() (err error) {
+			s, err := nextArg()
+			if err != nil {
+				return err
+			}
+			num, err := parseTime(s)
+			if err != nil {
+				return fmt.Errorf("--nico-ts-stop: Not a number %s\n", s)
+			}
+			opt.NicoTsStop = num
+			return nil
+		}},
+		Parser{regexp.MustCompile(`\A(?i)--?nico-?ts-?stop-?min\z`), func() (err error) {
+			s, err := nextArg()
+			if err != nil {
+				return err
+			}
+			num, err := parseTime(s + ":0")
+			if err != nil {
+				return fmt.Errorf("--nico-ts-stop-min: Not a number %s\n", s)
+			}
+			opt.NicoTsStop = num
 			return nil
 		}},
 		Parser{regexp.MustCompile(`\A(?i)--?nico-?(?:format|fmt)\z`), func() (err error) {
