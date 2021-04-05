@@ -12,7 +12,7 @@ import (
 	"log"
 	"path/filepath"
 	"os"
-	"strings"
+	"html"
 	"../gorman"
 	"../files"
 	"../httpbase"
@@ -47,7 +47,7 @@ func getComment(gm *gorman.GoroutineManager, ctx context.Context, sig <-chan str
 		timeoutMs, _done, err, neterr := func() (timeoutMs int, _done bool, err, neterr error) {
 			var uri string
 			if isReplay {
-				uri = fmt.Sprintf("https://www.youtube.com/live_chat_replay?continuation=%s&pbj=1", continuation)
+				uri = fmt.Sprintf("https://www.youtube.com/live_chat_replay/get_live_chat_replay?continuation=%s&pbj=1", continuation)
 			} else {
 				uri = fmt.Sprintf("https://www.youtube.com/live_chat/get_live_chat?continuation=%s&pbj=1", continuation)
 			}
@@ -63,8 +63,14 @@ func getComment(gm *gorman.GoroutineManager, ctx context.Context, sig <-chan str
 				return
 			}
 			if code != 200 {
-				neterr = fmt.Errorf("Status code: %v\n", code)
-				return
+				if code == 404 {
+					fmt.Printf("Status code: %v (ignored)\n", code)
+					time.Sleep(1000 * time.Millisecond)
+					return
+				} else {
+					neterr = fmt.Errorf("Status code: %v\n", code)
+					return
+				}
 			}
 
 			var data interface{}
@@ -117,7 +123,18 @@ func getComment(gm *gorman.GoroutineManager, ctx context.Context, sig <-chan str
 					if (! ok) {
 						continue
 					}
-					message, _ := objs.FindString(liveChatMessageRenderer, "message", "runs", "text")
+					var message string
+					if runs, ok := objs.FindArray(liveChatMessageRenderer, "message", "runs"); ok {
+						for _, run := range runs {
+							if text, ok := objs.FindString(run, "text"); ok {
+								message += text
+							} else if emojis, ok := objs.FindArray(run, "emoji", "shortcuts"); ok {
+								if emoji, ok := emojis[0].(string); ok {
+									message += emoji
+								}
+							}
+						}
+					}
 					timestampUsec, ok := objs.FindString(liveChatMessageRenderer, "timestampUsec")
 					if (! ok) {
 						continue
@@ -126,7 +143,7 @@ func getComment(gm *gorman.GoroutineManager, ctx context.Context, sig <-chan str
 
 					if false {
 						fmt.Printf("%v ", videoOffsetTimeMsec)
-						fmt.Printf("%v %v %v %v %v\n", timestampUsec, authorName, authorExternalChannelId, message, id)
+						fmt.Printf("%v %v %v %v %v %v\n", timestampUsec, count, authorName, authorExternalChannelId, message, id)
 					}
 
 					dbInsert(ctx, gm, db, mtx,
@@ -269,9 +286,9 @@ func dbCreate(ctx context.Context, db *sql.DB) (err error) {
 
 	_, err = db.ExecContext(ctx, `
 	CREATE UNIQUE INDEX IF NOT EXISTS comment0 ON comment(id);
-	CREATE UNIQUE INDEX IF NOT EXISTS comment1 ON comment(timestampUsec);
-	CREATE UNIQUE INDEX IF NOT EXISTS comment2 ON comment(videoOffsetTimeMsec);
-	CREATE UNIQUE INDEX IF NOT EXISTS comment3 ON comment(count);
+	CREATE INDEX IF NOT EXISTS comment1 ON comment(timestampUsec);
+	CREATE INDEX IF NOT EXISTS comment2 ON comment(videoOffsetTimeMsec);
+	CREATE INDEX IF NOT EXISTS comment3 ON comment(count);
 	`)
 	if err != nil {
 		return
@@ -334,7 +351,8 @@ var SelComment = `SELECT
 	IFNULL(videoOffsetTimeMsec, -1),
 	authorName,
 	channelId,
-	message
+	message,
+	count
 	FROM comment
 	ORDER BY timestampUsec
 `
@@ -374,6 +392,7 @@ func WriteComment(db *sql.DB, fileName string) {
 		var authorName string
 		var channelId string
 		var message string
+		var count int64
 
 		err = rows.Scan(
 			&timestampUsec,
@@ -381,6 +400,7 @@ func WriteComment(db *sql.DB, fileName string) {
 			&authorName,
 			&channelId,
 			&message,
+			&count,
 		)
 		if err != nil {
 			log.Println(err)
@@ -399,16 +419,17 @@ func WriteComment(db *sql.DB, fileName string) {
 		}
 
 		line := fmt.Sprintf(
-			`<chat vpos="%d" date="%d" date_usec="%d" user_id="%s"`,
+			`<chat vpos="%d" date="%d" date_usec="%d" user_id="%s" name="%s" no="%d"`,
 			vpos,
 			(timestampUsec / (1000 * 1000)),
 			(timestampUsec % (1000 * 1000)),
 			channelId,
+			html.EscapeString(authorName),
+			count,
 		)
 
 		line += ">"
-		message = strings.Replace(message, "&", "&amp;", -1)
-		message = strings.Replace(message, "<", "&lt;", -1)
+		message = html.EscapeString(message)
 		line += message
 		line += "</chat>"
 		fmt.Fprintf(f, "%s\r\n", line)
