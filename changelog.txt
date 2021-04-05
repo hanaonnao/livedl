@@ -101,6 +101,18 @@ https://egg.5ch.net/test/read.cgi/software/1595715643/163
 　　　開始シーケンス番号は（変換ではないが） -nico-conv-seqno-start で指定  
 　　　　使用例：$ livedl lvXXXXXXXXX.sqlite3 -d2h -nico-hls-port 12345 -nico-conv-seqno-start 2780   
 
+2020.07.29　‐　ニコ生のコメント保存できない問題を修正  
+https://egg.5ch.net/test/read.cgi/software/1595715643/17  
+
+2020.07.04　‐　「broadcastId not found」エラーへの対処  
+https://egg.5ch.net/test/read.cgi/software/1570634489/744  
+
+
+2020.06.08 - APIの仕様変更に対応  
+http://egg.5ch.net/test/read.cgi/software/1570634489/535  
+
+
+
 20181215.35
 ・-nico-ts-start-minオプションの追加
 ・win32bit版のビルドを追加
