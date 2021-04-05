@@ -43,6 +43,11 @@ type Status struct {
 	chStream                chan struct{}
 	wg                     *sync.WaitGroup
 }
+type StatusE struct {
+	Url                     string  `xml:"rtmp>url"`
+	Ticket                  string  `xml:"rtmp>ticket"`
+	ErrorCode               string  `xml:"error>code"`
+}
 type Stream struct {
 	originUrl string
 	streamName string
@@ -590,13 +595,15 @@ func getTicket(opt options.Option) (ticket string, err error) {
 	return
 }
 func getStatus(opt options.Option) (status *Status, notLogin bool, err error) {
-	var uri string
+	var uri, uriE string
 
 	// experimental
 	if opt.NicoStatusHTTPS {
 		uri = fmt.Sprintf("https://ow.live.nicovideo.jp/api/getplayerstatus?v=%s", opt.NicoLiveId)
+		uriE = fmt.Sprintf("https://ow.live.nicovideo.jp/api/getedgestatus?v=%s", opt.NicoLiveId)
 	} else {
 		uri = fmt.Sprintf("http://watch.live.nicovideo.jp/api/getplayerstatus?v=%s", opt.NicoLiveId)
+		uriE = fmt.Sprintf("http://watch.live.nicovideo.jp/api/getedgestatus?v=%s", opt.NicoLiveId)
 	}
 
 	header := make(map[string]string, 4)
@@ -635,6 +642,41 @@ func getStatus(opt options.Option) (status *Status, notLogin bool, err error) {
 	default:
 		err = fmt.Errorf("Error code: %s\n", status.ErrorCode)
 		return
+	}
+
+	respE, err, neterr := httpbase.Get(uriE, header)
+	if err != nil {
+		return
+	}
+	if neterr != nil {
+		err = neterr
+		return
+	}
+	defer respE.Body.Close()
+
+	datE, _ := ioutil.ReadAll(respE.Body)
+	statusE := &StatusE{}
+	err = xml.Unmarshal(datE, statusE)
+	if err != nil {
+		//fmt.Println(string(dat))
+		fmt.Printf("error: %v", err)
+		return
+	}
+
+	switch statusE.ErrorCode {
+	case "":
+	case "notlogin":
+		notLogin = true
+	default:
+		err = fmt.Errorf("Error code: %s\n", statusE.ErrorCode)
+		return
+	}
+
+	if statusE.Url != "" {
+		status.Url = statusE.Url
+	}
+	if statusE.Ticket != "" {
+		status.Ticket = statusE.Ticket
 	}
 
 	return
