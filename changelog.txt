@@ -1,5 +1,82 @@
 ﻿更新履歴/説明
  
+20210405.40
+
+更新12 (2021/01/31)
+・livedl で-yt-no-streamlink=on -yt-no-youtube-dl=on が指定されたとき、YouTube Live のコメントを永久に取得し続けるパッチ
+https://egg.5ch.net/test/read.cgi/software/1595715643/567
+止めたいときは Ctrl-C を入力して少し待てば「comment done」と表示されて終了します
+放送終了後に放置した場合どういう挙動になるかは試してないです
+
+更新11 (2021/01/30)
+・livedl を YouTube Live の直近の仕様変更に対応
+https://egg.5ch.net/test/read.cgi/software/1595715643/559
+
+
+更新10 (2021/01/27)
+・金額のフォーマットの要望ないみたいだからこっちで勝手に決めさせてもらったよ
+https://egg.5ch.net/test/read.cgi/software/1595715643/543
+Youtubeの金額フォーマットを追加(コメントのamount属性)
+
+更新9 (2021/01/25)
+・livedl で YouTubeLive リプレイのコメントが取れるよう直したよ
+https://egg.5ch.net/test/read.cgi/software/1595715643/523
+YouTubeLiveのコメントAPI変更
+
+更新8 (2021/01/01)
+・livedl で一部コメントが保存されないのを修正する
+https://egg.5ch.net/test/read.cgi/software/1595715643/451
+https://egg.5ch.net/test/read.cgi/software/1595715643/457
+livedlでvpos属性またはdate_usec属性がないコメントが保存されませんの修正
+
+更新7 (2021/01/01)
+・livedl で waybackkey の取得方法を変更する
+https://egg.5ch.net/test/read.cgi/software/1595715643/424
+
+更新6 (2020/12/13)
+・livedl で YouTube Live を扱えるようにする
+patch は livedl.youtube-r1.patch のみ適用
+https://egg.5ch.net/test/read.cgi/software/1595715643/402
+https://egg.5ch.net/test/read.cgi/software/1595715643/406
+
+更新5 (2020/11/15)
+・livedl で HTTP のタイムアウト時間を変更できるようにする
+https://egg.5ch.net/test/read.cgi/software/1595715643/272
+
+追加オプション
+　-http-timeout ＜num＞
+　　タイムアウト時間（秒）デフォルト: 5秒（最低値）
+  
+更新4 (2020/10/25)
+・旧配信のタイムシフトを録画できるようにする
+https://egg.5ch.net/test/read.cgi/software/1595715643/228
+
+更新3（2020/10/06）
+patch は livedl.comment-name-attribute-r1.patch.gz のみ適用
+https://egg.5ch.net/test/read.cgi/software/1595715643/194
+更新2の修正
+
+更新2（2020/10/05）
+・XMLコメントのname属性(出演者が名前付きのコメントする時に使用)を保存するように修正
+https://egg.5ch.net/test/read.cgi/software/1595715643/174
+
+更新1（2020/10/03）
+・指定時間でタイムシフト録画を停止するためのパッチ（＋α）
+https://egg.5ch.net/test/read.cgi/software/1595715643/163
+
+オプション
+　-nico-ts-start ＜num＞
+　　タイムシフトの録画を指定した再生時間（秒）から開始する
+　-nico-ts-stop ＜num＞
+　　タイムシフトの録画を指定した再生時間（秒）で停止する
+　上記2つは ＜分＞:＜秒＞ | ＜時＞:＜分＞:＜秒＞ の形式でも指定可能
+
+　-nico-ts-start-min ＜num＞
+　　タイムシフトの録画を指定した再生時間（分）から開始する
+　-nico-ts-stop-min ＜num＞
+　　タイムシフトの録画を指定した再生時間（分）で停止する
+　上記2つは ＜時＞:＜分＞ の形式でも指定可能
+ 
 20200903.39
 （https://egg.5ch.net/test/read.cgi/software/1595715643/57）
  
