@@ -425,7 +425,9 @@ func Record(id string, ytNoStreamlink, ytNoYoutube_dl bool) (err error) {
 			}
 
 		} else {
-			gmCom.Cancel()
+			if !ytNoStreamlink || !ytNoYoutube_dl {
+				gmCom.Cancel()
+			}
 			gmCom.Wait()
 		}
 	}
