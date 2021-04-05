@@ -374,6 +374,7 @@ func (hls *NicoHls) commentHandler(tag string, attr interface{}) (err error) {
 			"user_id": attrMap["user_id"],
 			"content": attrMap["content"],
 			"mail": attrMap["mail"],
+			"name": attrMap["name"],
 			"premium": attrMap["premium"],
 			"score": attrMap["score"],
 			"thread": thread,
